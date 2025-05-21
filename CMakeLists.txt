@@ -7,7 +7,11 @@ set(CMAKE_MACOSX_BUNDLE OFF)
 
 project(bare_webp C)
 
-fetch_package("github:webmproject/libwebp@1.5.0")
+fetch_package(
+  "github:webmproject/libwebp@1.5.0"
+  PATCHES
+    patches/01-webp-windows-clang.patch
+)
 
 add_bare_module(bare_webp)
 
