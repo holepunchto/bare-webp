@@ -11,6 +11,7 @@
     "binding.c",
     "binding.js",
     "CMakeLists.txt",
+    "patches",
     "prebuilds"
   ],
   "addon": true,
