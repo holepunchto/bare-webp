@@ -2,7 +2,6 @@
 #include <bare.h>
 #include <js.h>
 #include <stdlib.h>
-#include <utf.h>
 #include <webp/decode.h>
 #include <webp/encode.h>
 
