@@ -21,6 +21,18 @@ test('decode animated .webp', (t) => {
   }
 })
 
+test('decode animated .webp, non-animated', (t) => {
+  const image = require('./test/fixtures/grapefruit.webp', {
+    with: { type: 'binary' }
+  })
+
+  const decoded = webp.decodeAnimated(image)
+
+  for (const frame of decoded.frames) {
+    t.comment(frame)
+  }
+})
+
 test('encode .webp', (t) => {
   const image = require('./test/fixtures/grapefruit.webp', {
     with: { type: 'binary' }
