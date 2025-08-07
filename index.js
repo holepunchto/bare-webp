@@ -10,6 +10,43 @@ exports.decode = function decode(image) {
   }
 }
 
+exports.decodeAnimated = function decodeAnimated(image) {
+  const { width, height, loops, decoder } = binding.initAnimatedDecoder(image)
+
+  const frames = {
+    next() {
+      const frame = binding.getNextAnimatedDecoderFrame(decoder)
+
+      if (frame === null) {
+        return {
+          done: true
+        }
+      }
+
+      const { data, timestamp } = frame
+
+      return {
+        done: false,
+        value: {
+          timestamp,
+          data: Buffer.from(data)
+        }
+      }
+    },
+
+    [Symbol.iterator]() {
+      return frames
+    }
+  }
+
+  return {
+    width,
+    height,
+    loops,
+    frames
+  }
+}
+
 exports.encode = function encode(image, opts = {}) {
   const { quality = 90 } = opts
 

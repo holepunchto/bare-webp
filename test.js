@@ -1,12 +1,36 @@
 const test = require('brittle')
-const png = require('.')
+const webp = require('.')
 
 test('decode .webp', (t) => {
   const image = require('./test/fixtures/grapefruit.webp', {
     with: { type: 'binary' }
   })
 
-  t.comment(png.decode(image))
+  t.comment(webp.decode(image))
+})
+
+test('decode animated .webp', (t) => {
+  const image = require('./test/fixtures/nyan.webp', {
+    with: { type: 'binary' }
+  })
+
+  const decoded = webp.decodeAnimated(image)
+
+  for (const frame of decoded.frames) {
+    t.comment(frame)
+  }
+})
+
+test('decode animated .webp, non-animated', (t) => {
+  const image = require('./test/fixtures/grapefruit.webp', {
+    with: { type: 'binary' }
+  })
+
+  const decoded = webp.decodeAnimated(image)
+
+  for (const frame of decoded.frames) {
+    t.comment(frame)
+  }
 })
 
 test('encode .webp', (t) => {
@@ -14,7 +38,7 @@ test('encode .webp', (t) => {
     with: { type: 'binary' }
   })
 
-  const decoded = png.decode(image)
+  const decoded = webp.decode(image)
 
-  t.comment(png.encode(decoded))
+  t.comment(webp.encode(decoded))
 })
