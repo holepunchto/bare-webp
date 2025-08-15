@@ -5,6 +5,7 @@
 #include <webp/decode.h>
 #include <webp/demux.h>
 #include <webp/encode.h>
+#include <webp/mux.h>
 
 static void
 bare_webp__on_finalize_image(js_env_t *env, void *data, void *finalize_hint) {
@@ -138,13 +139,45 @@ bare_webp_animated_decoder_init(js_env_t *env, js_callback_info_t *info) {
 
   WebPData data = {webp, len};
 
-  WebPAnimDecoderOptions options = {MODE_RGBA};
+  WebPAnimDecoderOptions options;
+  WebPAnimDecoderOptionsInit(&options);
+
+  options.color_mode = MODE_RGBA;
 
   WebPAnimDecoder *decoder = WebPAnimDecoderNew(&data, &options);
 
+  js_value_t *result;
+  err = js_create_external(env, (void *) decoder, bare_webp__on_finalize_decoder, NULL, &result);
+  assert(err == 0);
+
+  return result;
+}
+
+static js_value_t *
+bare_webp_animated_decoder_get_info(js_env_t *env, js_callback_info_t *info) {
+  int err;
+
+  size_t argc = 1;
+  js_value_t *argv[1];
+
+  err = js_get_callback_info(env, info, &argc, argv, NULL, NULL);
+  assert(err == 0);
+
+  assert(argc == 1);
+
+  WebPAnimDecoder *decoder;
+  err = js_get_value_external(env, argv[0], (void **) &decoder);
+  assert(err == 0);
+
   WebPAnimInfo animation;
   err = WebPAnimDecoderGetInfo(decoder, &animation);
-  assert(err == 1);
+
+  if (err != 1) {
+    err = js_throw_error(env, NULL, "Invalid image");
+    assert(err == 0);
+
+    return NULL;
+  }
 
   uint32_t width = animation.canvas_width;
   uint32_t height = animation.canvas_height;
@@ -203,11 +236,23 @@ bare_webp_animated_decoder_get_next_frame(js_env_t *env, js_callback_info_t *inf
     uint8_t *data;
     int timestamp;
     err = WebPAnimDecoderGetNext(decoder, &data, &timestamp);
-    assert(err == 1);
+
+    if (err != 1) {
+      err = js_throw_error(env, NULL, "Invalid image");
+      assert(err == 0);
+
+      return NULL;
+    }
 
     WebPAnimInfo animation;
     err = WebPAnimDecoderGetInfo(decoder, &animation);
-    assert(err == 1);
+
+    if (err != 1) {
+      err = js_throw_error(env, NULL, "Invalid image");
+      assert(err == 0);
+
+      return NULL;
+    }
 
     uint32_t width = animation.canvas_width;
     uint32_t height = animation.canvas_height;
@@ -238,6 +283,137 @@ bare_webp_animated_decoder_get_next_frame(js_env_t *env, js_callback_info_t *inf
   return result;
 }
 
+static void
+bare_webp__on_finalize_encoder(js_env_t *env, void *data, void *finalize_hint) {
+  WebPAnimEncoderDelete(data);
+}
+
+static js_value_t *
+bare_webp_animated_encoder_init(js_env_t *env, js_callback_info_t *info) {
+  int err;
+
+  size_t argc = 2;
+  js_value_t *argv[2];
+
+  err = js_get_callback_info(env, info, &argc, argv, NULL, NULL);
+  assert(err == 0);
+
+  assert(argc == 2);
+
+  int64_t width;
+  err = js_get_value_int64(env, argv[0], &width);
+  assert(err == 0);
+
+  int64_t height;
+  err = js_get_value_int64(env, argv[1], &height);
+  assert(err == 0);
+
+  WebPAnimEncoderOptions options;
+  WebPAnimEncoderOptionsInit(&options);
+
+  WebPAnimEncoder *encoder = WebPAnimEncoderNew(width, height, &options);
+
+  js_value_t *result;
+  err = js_create_external(env, encoder, bare_webp__on_finalize_encoder, NULL, &result);
+  assert(err == 0);
+
+  return result;
+}
+
+static js_value_t *
+bare_webp_animated_encoder_add_frame(js_env_t *env, js_callback_info_t *info) {
+  int err;
+
+  size_t argc = 5;
+  js_value_t *argv[5];
+
+  err = js_get_callback_info(env, info, &argc, argv, NULL, NULL);
+  assert(err == 0);
+
+  assert(argc == 5);
+
+  WebPAnimEncoder *encoder;
+  err = js_get_value_external(env, argv[0], (void **) &encoder);
+  assert(err == 0);
+
+  uint8_t *webp;
+  err = js_get_typedarray_info(env, argv[1], NULL, (void **) &webp, NULL, NULL, NULL);
+  assert(err == 0);
+
+  int64_t width;
+  err = js_get_value_int64(env, argv[2], &width);
+  assert(err == 0);
+
+  int64_t height;
+  err = js_get_value_int64(env, argv[3], &height);
+  assert(err == 0);
+
+  int64_t timestamp;
+  err = js_get_value_int64(env, argv[4], &timestamp);
+  assert(err == 0);
+
+  WebPConfig config;
+  WebPConfigInit(&config);
+
+  WebPPicture frame;
+  WebPPictureInit(&frame);
+
+  frame.width = width;
+  frame.height = height;
+
+  err = WebPPictureImportRGBA(&frame, webp, width * 4);
+
+  if (err != 1) {
+    err = js_throw_error(env, NULL, "Invalid frame");
+    assert(err == 0);
+
+    return NULL;
+  }
+
+  err = WebPAnimEncoderAdd(encoder, &frame, timestamp, &config);
+
+  if (err != 1) {
+    err = js_throw_error(env, NULL, "Invalid frame");
+    assert(err == 0);
+
+    return NULL;
+  }
+
+  return NULL;
+}
+
+static void
+bare_webp__on_finalize_data(js_env_t *env, void *data, void *finalize_hint) {
+  WebPFree(data);
+}
+
+static js_value_t *
+bare_webp_animated_encoder_assemble(js_env_t *env, js_callback_info_t *info) {
+  int err;
+
+  size_t argc = 1;
+  js_value_t *argv[1];
+
+  err = js_get_callback_info(env, info, &argc, argv, NULL, NULL);
+  assert(err == 0);
+
+  assert(argc == 1);
+
+  WebPAnimEncoder *encoder;
+  err = js_get_value_external(env, argv[0], (void **) &encoder);
+  assert(err == 0);
+
+  WebPData data;
+  err = WebPAnimEncoderAssemble(encoder, &data);
+  assert(err == 1);
+
+  js_value_t *buffer;
+  err = js_create_external_arraybuffer(env, (void *) data.bytes, data.size, bare_webp__on_finalize_data, NULL, &buffer);
+  assert(err == 0);
+
+  return buffer;
+}
+
 static js_value_t *
 bare_webp_exports(js_env_t *env, js_value_t *exports) {
   int err;
@@ -254,8 +430,13 @@ bare_webp_exports(js_env_t *env, js_value_t *exports) {
   V("decode", bare_webp_decode)
   V("encode", bare_webp_encode)
 
-  V("initAnimatedDecoder", bare_webp_animated_decoder_init)
-  V("getNextAnimatedDecoderFrame", bare_webp_animated_decoder_get_next_frame)
+  V("animatedDecoderInit", bare_webp_animated_decoder_init)
+  V("animatedDecoderGetInfo", bare_webp_animated_decoder_get_info)
+  V("animatedDecoderGetNextFrame", bare_webp_animated_decoder_get_next_frame)
+
+  V("animatedEncoderInit", bare_webp_animated_encoder_init)
+  V("animatedEncoderAddFrame", bare_webp_animated_encoder_add_frame)
+  V("animatedEncoderAssemble", bare_webp_animated_encoder_assemble)
 #undef V
 
   return exports;

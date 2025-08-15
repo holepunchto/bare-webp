@@ -11,11 +11,13 @@ exports.decode = function decode(image) {
 }
 
 exports.decodeAnimated = function decodeAnimated(image) {
-  const { width, height, loops, decoder } = binding.initAnimatedDecoder(image)
+  const decoder = binding.animatedDecoderInit(image)
+
+  const { width, height, loops } = binding.animatedDecoderGetInfo(decoder)
 
   const frames = {
     next() {
-      const frame = binding.getNextAnimatedDecoderFrame(decoder)
+      const frame = binding.animatedDecoderGetNextFrame(decoder)
 
       if (frame === null) {
         return {
@@ -58,6 +60,22 @@ exports.encode = function encode(image, opts = {}) {
   )
 
   return Buffer.from(buffer)
+}
+
+exports.encodeAnimated = function encodeAnimated(image) {
+  const encoder = binding.animatedEncoderInit(image.width, image.height)
+
+  for (const { data, timestamp } of image.frames) {
+    binding.animatedEncoderAddFrame(
+      encoder,
+      data,
+      image.width,
+      image.height,
+      timestamp
+    )
+  }
+
+  return Buffer.from(binding.animatedEncoderAssemble(encoder))
 }
 
 function clamp(value, min, max) {
