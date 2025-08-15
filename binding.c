@@ -372,6 +372,8 @@ bare_webp_animated_encoder_add_frame(js_env_t *env, js_callback_info_t *info) {
 
   err = WebPAnimEncoderAdd(encoder, &frame, timestamp, &config);
 
+  WebPPictureFree(&frame);
+
   if (err != 1) {
     err = js_throw_error(env, NULL, "Invalid frame");
     assert(err == 0);
