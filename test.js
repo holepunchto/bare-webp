@@ -42,3 +42,13 @@ test('encode .webp', (t) => {
 
   t.comment(webp.encode(decoded))
 })
+
+test('encode animated .webp', (t) => {
+  const image = require('./test/fixtures/nyan.webp', {
+    with: { type: 'binary' }
+  })
+
+  const decoded = webp.decodeAnimated(image)
+
+  t.comment(webp.encodeAnimated(decoded))
+})

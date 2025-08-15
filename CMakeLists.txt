@@ -26,4 +26,5 @@ target_link_libraries(
   PUBLIC
     webp
     webpdemux
+    libwebpmux
 )
