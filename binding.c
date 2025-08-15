@@ -221,7 +221,7 @@ bare_webp_animated_decoder_get_next_frame(js_env_t *env, js_callback_info_t *inf
   err = js_get_callback_info(env, info, &argc, argv, NULL, NULL);
   assert(err == 0);
 
-  assert(argc == 1);
+  assert(argc == 2);
 
   WebPAnimDecoder *decoder;
   err = js_get_value_external(env, argv[0], (void **) &decoder);

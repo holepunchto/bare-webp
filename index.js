@@ -17,7 +17,10 @@ exports.decodeAnimated = function decodeAnimated(image) {
 
   const frames = {
     next() {
-      const frame = binding.animatedDecoderGetNextFrame(decoder)
+      const frame = binding.animatedDecoderGetNextFrame(
+        decoder,
+        image // Keep a reference for lifetime management
+      )
 
       if (frame === null) {
         return {
