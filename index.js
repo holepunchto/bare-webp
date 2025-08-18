@@ -33,6 +33,8 @@ exports.decodeAnimated = function decodeAnimated(image) {
       return {
         done: false,
         value: {
+          width,
+          height,
           timestamp,
           data: Buffer.from(data)
         }
