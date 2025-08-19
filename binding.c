@@ -187,13 +187,6 @@ bare_webp_animated_decoder_get_info(js_env_t *env, js_callback_info_t *info) {
   err = js_create_object(env, &result);
   assert(err == 0);
 
-  js_value_t *handle;
-  err = js_create_external(env, (void *) decoder, bare_webp__on_finalize_decoder, NULL, &handle);
-  assert(err == 0);
-
-  err = js_set_named_property(env, result, "decoder", handle);
-  assert(err == 0);
-
 #define V(n) \
   { \
     js_value_t *val; \
