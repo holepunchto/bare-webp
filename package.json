@@ -1,6 +1,6 @@
 {
   "name": "bare-webp",
-  "version": "1.2.3",
+  "version": "1.2.4",
   "description": "WebP support for Bare",
   "exports": {
     "./package": "./package.json",
