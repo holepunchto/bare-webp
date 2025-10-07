@@ -341,8 +341,8 @@ bare_webp_animated_encoder_add_frame(js_env_t *env, js_callback_info_t *info) {
   err = js_get_value_int64(env, argv[3], &height);
   assert(err == 0);
 
-  int64_t quality;
-  err = js_get_value_int64(env, argv[4], &quality);
+  double quality;
+  err = js_get_value_double(env, argv[4], &quality);
   assert(err == 0);
 
   int64_t timestamp;
