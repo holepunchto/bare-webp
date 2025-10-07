@@ -317,13 +317,13 @@ static js_value_t *
 bare_webp_animated_encoder_add_frame(js_env_t *env, js_callback_info_t *info) {
   int err;
 
-  size_t argc = 5;
-  js_value_t *argv[5];
+  size_t argc = 6;
+  js_value_t *argv[6];
 
   err = js_get_callback_info(env, info, &argc, argv, NULL, NULL);
   assert(err == 0);
 
-  assert(argc == 5);
+  assert(argc == 6);
 
   WebPAnimEncoder *encoder;
   err = js_get_value_external(env, argv[0], (void **) &encoder);
@@ -341,12 +341,18 @@ bare_webp_animated_encoder_add_frame(js_env_t *env, js_callback_info_t *info) {
   err = js_get_value_int64(env, argv[3], &height);
   assert(err == 0);
 
+  int64_t quality;
+  err = js_get_value_int64(env, argv[4], &quality);
+  assert(err == 0);
+
   int64_t timestamp;
-  err = js_get_value_int64(env, argv[4], &timestamp);
+  err = js_get_value_int64(env, argv[5], &timestamp);
   assert(err == 0);
 
   WebPConfig config;
   WebPConfigInit(&config);
+
+  config.quality = quality;
 
   WebPPicture frame;
   WebPPictureInit(&frame);

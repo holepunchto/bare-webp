@@ -67,7 +67,9 @@ exports.encode = function encode(image, opts = {}) {
   return Buffer.from(buffer)
 }
 
-exports.encodeAnimated = function encodeAnimated(image) {
+exports.encodeAnimated = function encodeAnimated(image, opts = {}) {
+  const { quality = 90 } = opts
+
   const encoder = binding.animatedEncoderInit(image.width, image.height)
 
   for (const { data, timestamp } of image.frames) {
@@ -76,6 +78,7 @@ exports.encodeAnimated = function encodeAnimated(image) {
       data,
       image.width,
       image.height,
+      clamp(quality, 0, 100),
       timestamp
     )
   }
