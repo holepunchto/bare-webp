@@ -57,12 +57,7 @@ exports.decodeAnimated = function decodeAnimated(image) {
 exports.encode = function encode(image, opts = {}) {
   const { quality = 90 } = opts
 
-  const buffer = binding.encode(
-    image.data,
-    image.width,
-    image.height,
-    clamp(quality, 0, 100)
-  )
+  const buffer = binding.encode(image.data, image.width, image.height, clamp(quality, 0, 100))
 
   return Buffer.from(buffer)
 }
