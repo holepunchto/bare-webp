@@ -306,6 +306,13 @@ bare_webp_animated_encoder_init(js_env_t *env, js_callback_info_t *info) {
 
   WebPAnimEncoder *encoder = WebPAnimEncoderNew(width, height, &options);
 
+  if (encoder == NULL) {
+    err = js_throw_error(env, NULL, "Invalid image");
+    assert(err == 0);
+
+    return NULL;
+  }
+
   js_value_t *result;
   err = js_create_external(env, encoder, bare_webp__on_finalize_encoder, NULL, &result);
   assert(err == 0);

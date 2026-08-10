@@ -76,3 +76,25 @@ test('encode animated .webp with less quality', (t) => {
   t.ok(encoded.byteLength < image.byteLength)
   t.comment(encoded)
 })
+
+test('decode throws on invalid input', (t) => {
+  t.exception(() => webp.decode(Buffer.from('not a webp')), /Invalid image/)
+})
+
+test('encode throws on invalid dimensions', (t) => {
+  t.exception(
+    () => webp.encode({ width: 0, height: 0, data: Buffer.alloc(0) }),
+    /Invalid image/
+  )
+})
+
+test('decodeAnimated throws on invalid input', (t) => {
+  t.exception(() => webp.decodeAnimated(Buffer.from('not a webp')), /Invalid image/)
+})
+
+test('encodeAnimated throws on invalid dimensions', (t) => {
+  t.exception(
+    () => webp.encodeAnimated({ width: 0, height: 0, frames: [] }),
+    /Invalid image/
+  )
+})
