@@ -82,10 +82,7 @@ test('decode throws on invalid input', (t) => {
 })
 
 test('encode throws on invalid dimensions', (t) => {
-  t.exception(
-    () => webp.encode({ width: 0, height: 0, data: Buffer.alloc(0) }),
-    /Invalid image/
-  )
+  t.exception(() => webp.encode({ width: 0, height: 0, data: Buffer.alloc(0) }), /Invalid image/)
 })
 
 test('decodeAnimated throws on invalid input', (t) => {
@@ -93,8 +90,5 @@ test('decodeAnimated throws on invalid input', (t) => {
 })
 
 test('encodeAnimated throws on invalid dimensions', (t) => {
-  t.exception(
-    () => webp.encodeAnimated({ width: 0, height: 0, frames: [] }),
-    /Invalid image/
-  )
+  t.exception(() => webp.encodeAnimated({ width: 0, height: 0, frames: [] }), /Invalid image/)
 })
