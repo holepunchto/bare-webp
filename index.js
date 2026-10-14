@@ -10,8 +10,10 @@ exports.decode = function decode(image) {
   }
 }
 
-exports.decodeAnimated = function decodeAnimated(image) {
-  const decoder = binding.animatedDecoderInit(image)
+exports.decodeAnimated = function decodeAnimated(image, opts = {}) {
+  const { maxPixels = binding.defaultMaxPixels } = opts
+
+  const decoder = binding.animatedDecoderInit(image, maxPixels)
 
   const { width, height, loops } = binding.animatedDecoderGetInfo(decoder)
 

@@ -92,3 +92,29 @@ test('decodeAnimated throws on invalid input', (t) => {
 test('encodeAnimated throws on invalid dimensions', (t) => {
   t.exception(() => webp.encodeAnimated({ width: 0, height: 0, frames: [] }), /Invalid image/)
 })
+
+test('decodeAnimated() honours a pixel budget', (t) => {
+  const image = require('./test/fixtures/nyan.webp', {
+    with: { type: 'binary' }
+  })
+
+  const { frames } = webp.decodeAnimated(image, { maxPixels: 476 * 280 * 3 })
+
+  let count = 0
+
+  t.exception(() => {
+    for (const frame of frames) count++
+  }, /exceeds maximum decoded size/)
+
+  t.is(count, 3)
+})
+
+test('decodeAnimated() streams past the budget when it is lifted', (t) => {
+  const image = require('./test/fixtures/nyan.webp', {
+    with: { type: 'binary' }
+  })
+
+  const { frames } = webp.decodeAnimated(image, { maxPixels: 0 })
+
+  t.is([...frames].length, 12)
+})
