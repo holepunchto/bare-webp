@@ -7,6 +7,22 @@
 #include <webp/encode.h>
 #include <webp/mux.h>
 
+// Cap a single frame whatever budget the caller asks for. Every frame is canvas
+// sized, so 64 Mpx at 4 bytes per pixel bounds one frame at 256 MiB.
+#define BARE_WEBP_MAX_FRAME_PIXELS (1ull << 26)
+
+// Budget for the pixels one decode may produce in total, for callers that
+// retain what they are handed. A frame count is cheap to inflate in the file,
+// so the per-frame cap alone leaves the total unbounded.
+#define BARE_WEBP_DEFAULT_MAX_PIXELS (1ull << 26)
+
+typedef struct {
+  WebPAnimDecoder *handle;
+
+  uint64_t pixels;
+  int64_t max_pixels;
+} bare_webp_decoder_t;
+
 static void
 bare_webp__on_finalize_image(js_env_t *env, void *data, void *finalize_hint) {
   WebPFree(data);
@@ -117,24 +133,32 @@ bare_webp_encode(js_env_t *env, js_callback_info_t *info) {
 
 static void
 bare_webp__on_finalize_decoder(js_env_t *env, void *data, void *finalize_hint) {
-  WebPAnimDecoderDelete(data);
+  bare_webp_decoder_t *decoder = (bare_webp_decoder_t *) data;
+
+  WebPAnimDecoderDelete(decoder->handle);
+
+  free(decoder);
 }
 
 static js_value_t *
 bare_webp_animated_decoder_init(js_env_t *env, js_callback_info_t *info) {
   int err;
 
-  size_t argc = 1;
-  js_value_t *argv[1];
+  size_t argc = 2;
+  js_value_t *argv[2];
 
   err = js_get_callback_info(env, info, &argc, argv, NULL, NULL);
   assert(err == 0);
 
-  assert(argc == 1);
+  assert(argc == 2);
 
   uint8_t *webp;
   size_t len;
   err = js_get_typedarray_info(env, argv[0], NULL, (void **) &webp, &len, NULL, NULL);
+  assert(err == 0);
+
+  int64_t max_pixels = 0;
+  err = js_get_value_int64(env, argv[1], &max_pixels);
   assert(err == 0);
 
   WebPData data = {webp, len};
@@ -144,7 +168,21 @@ bare_webp_animated_decoder_init(js_env_t *env, js_callback_info_t *info) {
 
   options.color_mode = MODE_RGBA;
 
-  WebPAnimDecoder *decoder = WebPAnimDecoderNew(&data, &options);
+  WebPAnimDecoder *handle = WebPAnimDecoderNew(&data, &options);
+
+  if (handle == NULL) {
+    err = js_throw_error(env, NULL, "Invalid image");
+    assert(err == 0);
+
+    return NULL;
+  }
+
+  bare_webp_decoder_t *decoder = malloc(sizeof(bare_webp_decoder_t));
+  assert(decoder != NULL);
+
+  decoder->handle = handle;
+  decoder->pixels = 0;
+  decoder->max_pixels = max_pixels;
 
   js_value_t *result;
   err = js_create_external(env, (void *) decoder, bare_webp__on_finalize_decoder, NULL, &result);
@@ -165,12 +203,12 @@ bare_webp_animated_decoder_get_info(js_env_t *env, js_callback_info_t *info) {
 
   assert(argc == 1);
 
-  WebPAnimDecoder *decoder;
+  bare_webp_decoder_t *decoder;
   err = js_get_value_external(env, argv[0], (void **) &decoder);
   assert(err == 0);
 
   WebPAnimInfo animation;
-  err = WebPAnimDecoderGetInfo(decoder, &animation);
+  err = WebPAnimDecoderGetInfo(decoder->handle, &animation);
 
   if (err != 1) {
     err = js_throw_error(env, NULL, "Invalid image");
@@ -182,6 +220,13 @@ bare_webp_animated_decoder_get_info(js_env_t *env, js_callback_info_t *info) {
   uint32_t width = animation.canvas_width;
   uint32_t height = animation.canvas_height;
   uint32_t loops = animation.loop_count;
+
+  if ((uint64_t) width * height > BARE_WEBP_MAX_FRAME_PIXELS) {
+    err = js_throw_error(env, NULL, "WebP dimensions exceed maximum");
+    assert(err == 0);
+
+    return NULL;
+  }
 
   js_value_t *result;
   err = js_create_object(env, &result);
@@ -208,27 +253,27 @@ static js_value_t *
 bare_webp_animated_decoder_get_next_frame(js_env_t *env, js_callback_info_t *info) {
   int err;
 
-  size_t argc = 1;
-  js_value_t *argv[1];
+  size_t argc = 2;
+  js_value_t *argv[2];
 
   err = js_get_callback_info(env, info, &argc, argv, NULL, NULL);
   assert(err == 0);
 
   assert(argc == 2);
 
-  WebPAnimDecoder *decoder;
+  bare_webp_decoder_t *decoder;
   err = js_get_value_external(env, argv[0], (void **) &decoder);
   assert(err == 0);
 
   js_value_t *result;
 
-  if (WebPAnimDecoderHasMoreFrames(decoder)) {
+  if (WebPAnimDecoderHasMoreFrames(decoder->handle)) {
     err = js_create_object(env, &result);
     assert(err == 0);
 
     uint8_t *data;
     int timestamp;
-    err = WebPAnimDecoderGetNext(decoder, &data, &timestamp);
+    err = WebPAnimDecoderGetNext(decoder->handle, &data, &timestamp);
 
     if (err != 1) {
       err = js_throw_error(env, NULL, "Invalid image");
@@ -238,7 +283,7 @@ bare_webp_animated_decoder_get_next_frame(js_env_t *env, js_callback_info_t *inf
     }
 
     WebPAnimInfo animation;
-    err = WebPAnimDecoderGetInfo(decoder, &animation);
+    err = WebPAnimDecoderGetInfo(decoder->handle, &animation);
 
     if (err != 1) {
       err = js_throw_error(env, NULL, "Invalid image");
@@ -250,12 +295,30 @@ bare_webp_animated_decoder_get_next_frame(js_env_t *env, js_callback_info_t *inf
     uint32_t width = animation.canvas_width;
     uint32_t height = animation.canvas_height;
 
-    size_t len = width * height * 4;
+    if ((uint64_t) width * height > BARE_WEBP_MAX_FRAME_PIXELS) {
+      err = js_throw_error(env, NULL, "WebP dimensions exceed maximum");
+      assert(err == 0);
+
+      return NULL;
+    }
+
+    decoder->pixels += (uint64_t) width * height;
+
+    if (decoder->max_pixels > 0 && decoder->pixels > (uint64_t) decoder->max_pixels) {
+      err = js_throw_error(env, NULL, "WebP exceeds maximum decoded size");
+      assert(err == 0);
+
+      return NULL;
+    }
+
+    size_t len = (size_t) width * height * 4;
 
     js_value_t *buffer;
 
     uint8_t *view;
     err = js_create_unsafe_arraybuffer(env, len, (void **) &view, &buffer);
+
+    if (err < 0) return NULL;
 
     memcpy(view, data, len);
 
@@ -412,8 +475,16 @@ bare_webp_animated_encoder_assemble(js_env_t *env, js_callback_info_t *info) {
   assert(err == 0);
 
   WebPData data;
+  WebPDataInit(&data);
+
   err = WebPAnimEncoderAssemble(encoder, &data);
-  assert(err == 1);
+
+  if (err != 1) {
+    err = js_throw_error(env, NULL, "Failed to assemble animation");
+    assert(err == 0);
+
+    return NULL;
+  }
 
   js_value_t *buffer;
   err = js_create_external_arraybuffer(env, (void *) data.bytes, data.size, bare_webp__on_finalize_data, NULL, &buffer);
@@ -446,6 +517,13 @@ bare_webp_exports(js_env_t *env, js_value_t *exports) {
   V("animatedEncoderAddFrame", bare_webp_animated_encoder_add_frame)
   V("animatedEncoderAssemble", bare_webp_animated_encoder_assemble)
 #undef V
+
+  js_value_t *max_pixels;
+  err = js_create_int64(env, BARE_WEBP_DEFAULT_MAX_PIXELS, &max_pixels);
+  assert(err == 0);
+
+  err = js_set_named_property(env, exports, "defaultMaxPixels", max_pixels);
+  assert(err == 0);
 
   return exports;
 }
