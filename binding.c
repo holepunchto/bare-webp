@@ -1,5 +1,5 @@
 #include <assert.h>
-#include <bare.h>
+#include <bare/module.h>
 #include <js.h>
 #include <stdlib.h>
 #include <webp/decode.h>
@@ -18,6 +18,10 @@
 
 typedef struct {
   WebPAnimDecoder *handle;
+
+  // The decoder reads the image on every call, so it keeps a copy rather than
+  // the data of the typed array, which may move or be detached between calls.
+  WebPData image;
 
   uint64_t pixels;
   int64_t max_pixels;
@@ -137,6 +141,8 @@ bare_webp__on_finalize_decoder(js_env_t *env, void *data, void *finalize_hint) {
 
   WebPAnimDecoderDelete(decoder->handle);
 
+  WebPDataClear(&decoder->image);
+
   free(decoder);
 }
 
@@ -161,24 +167,37 @@ bare_webp_animated_decoder_init(js_env_t *env, js_callback_info_t *info) {
   err = js_get_value_int64(env, argv[1], &max_pixels);
   assert(err == 0);
 
-  WebPData data = {webp, len};
+  bare_webp_decoder_t *decoder = malloc(sizeof(bare_webp_decoder_t));
+  assert(decoder != NULL);
+
+  WebPDataInit(&decoder->image);
+
+  if (!WebPDataCopy(&(WebPData){webp, len}, &decoder->image)) {
+    free(decoder);
+
+    err = js_throw_error(env, NULL, "Out of memory");
+    assert(err == 0);
+
+    return NULL;
+  }
 
   WebPAnimDecoderOptions options;
   WebPAnimDecoderOptionsInit(&options);
 
   options.color_mode = MODE_RGBA;
 
-  WebPAnimDecoder *handle = WebPAnimDecoderNew(&data, &options);
+  WebPAnimDecoder *handle = WebPAnimDecoderNew(&decoder->image, &options);
 
   if (handle == NULL) {
+    WebPDataClear(&decoder->image);
+
+    free(decoder);
+
     err = js_throw_error(env, NULL, "Invalid image");
     assert(err == 0);
 
     return NULL;
   }
-
-  bare_webp_decoder_t *decoder = malloc(sizeof(bare_webp_decoder_t));
-  assert(decoder != NULL);
 
   decoder->handle = handle;
   decoder->pixels = 0;
