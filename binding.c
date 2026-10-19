@@ -1,6 +1,7 @@
 #include <assert.h>
 #include <bare/module.h>
 #include <js.h>
+#include <stdbool.h>
 #include <stdlib.h>
 #include <webp/decode.h>
 #include <webp/demux.h>
@@ -32,6 +33,31 @@ bare_webp__on_finalize_image(js_env_t *env, void *data, void *finalize_hint) {
   WebPFree(data);
 }
 
+// Checked against the header before libwebp allocates the canvas, which it does
+// as soon as a decoder is created.
+static bool
+bare_webp__check_dimensions(js_env_t *env, const uint8_t *webp, size_t len) {
+  int err;
+
+  int width, height;
+
+  if (!WebPGetInfo(webp, len, &width, &height)) {
+    err = js_throw_error(env, NULL, "Invalid image");
+    assert(err == 0);
+
+    return false;
+  }
+
+  if ((uint64_t) width * height > BARE_WEBP_MAX_FRAME_PIXELS) {
+    err = js_throw_error(env, NULL, "WebP dimensions exceed maximum");
+    assert(err == 0);
+
+    return false;
+  }
+
+  return true;
+}
+
 static js_value_t *
 bare_webp_decode(js_env_t *env, js_callback_info_t *info) {
   int err;
@@ -48,6 +74,8 @@ bare_webp_decode(js_env_t *env, js_callback_info_t *info) {
   size_t len;
   err = js_get_typedarray_info(env, argv[0], NULL, (void **) &webp, &len, NULL, NULL);
   assert(err == 0);
+
+  if (!bare_webp__check_dimensions(env, webp, len)) return NULL;
 
   js_value_t *result;
   err = js_create_object(env, &result);
@@ -77,7 +105,7 @@ bare_webp_decode(js_env_t *env, js_callback_info_t *info) {
   V(height);
 #undef V
 
-  len = width * height * 4;
+  len = (size_t) width * height * 4;
 
   js_value_t *buffer;
   err = js_create_external_arraybuffer(env, data, len, bare_webp__on_finalize_image, NULL, &buffer);
@@ -166,6 +194,8 @@ bare_webp_animated_decoder_init(js_env_t *env, js_callback_info_t *info) {
   int64_t max_pixels = 0;
   err = js_get_value_int64(env, argv[1], &max_pixels);
   assert(err == 0);
+
+  if (!bare_webp__check_dimensions(env, webp, len)) return NULL;
 
   bare_webp_decoder_t *decoder = malloc(sizeof(bare_webp_decoder_t));
   assert(decoder != NULL);
