@@ -93,6 +93,34 @@ test('encodeAnimated throws on invalid dimensions', (t) => {
   t.exception(() => webp.encodeAnimated({ width: 0, height: 0, frames: [] }), /Invalid image/)
 })
 
+test('decode rejects dimensions past the limit before decoding', (t) => {
+  const image = Buffer.from(
+    require('./test/fixtures/grapefruit.webp', {
+      with: { type: 'binary' }
+    })
+  )
+
+  // The VP8 frame header stores each 14-bit dimension at offset 26 and 28.
+  image.writeUInt16LE(16383, 26)
+  image.writeUInt16LE(16383, 28)
+
+  t.exception(() => webp.decode(image), /dimensions exceed maximum/)
+})
+
+test('decodeAnimated rejects a canvas past the limit before decoding', (t) => {
+  const image = Buffer.from(
+    require('./test/fixtures/nyan.webp', {
+      with: { type: 'binary' }
+    })
+  )
+
+  // The VP8X chunk stores the canvas size less one as two 24-bit fields.
+  image.writeUIntLE(32767, 24, 3)
+  image.writeUIntLE(32767, 27, 3)
+
+  t.exception(() => webp.decodeAnimated(image), /dimensions exceed maximum/)
+})
+
 test('decodeAnimated() honours a pixel budget', (t) => {
   const image = require('./test/fixtures/nyan.webp', {
     with: { type: 'binary' }
